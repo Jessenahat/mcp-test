@@ -32,7 +32,43 @@ app.get('/sse_once', (req, res) => {
   setTimeout(() => res.end(), 100); // closes connection after short delay
 });
 
-// You can add more endpoints here (e.g., /list_fields or /search_facilities with csv/json data)
+const fs = require('fs');
+const csv = require('csv-parser');
+
+app.get('/list_fields', (req, res) => {
+  const results = [];
+  fs.createReadStream('odhf_v1.1.csv')
+    .pipe(csv())
+    .on('headers', (headers) => {
+      res.json({columns: headers});
+    })
+    .on('error', err => {
+      res.status(500).json({error: err.message});
+    });
+});
+
+app.get('/search_facilities', (req, res) => {
+  const { province, facility_type } = req.query;
+  const results = [];
+  fs.createReadStream('odhf_v1.1.csv')
+    .pipe(csv())
+    .on('data', (data) => {
+      if (
+        (!province || (data['Province'] && data['Province'].toLowerCase().includes(province.toLowerCase()))) &&
+        (!facility_type || (data['Facility Type'] && data['Facility Type'].toLowerCase().includes(facility_type.toLowerCase())))
+      ) {
+        results.push(data);
+      }
+    })
+    .on('end', () => {
+      res.json(results.slice(0, 25)); // return only the first 25 matches
+    })
+    .on('error', err => {
+      res.status(500).json({error: err.message});
+    });
+});
+
+
 
 const port = process.env.PORT || 3000;
 app.listen(port, () => console.log(`MCP server running on ${port}`));
